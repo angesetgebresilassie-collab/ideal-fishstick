@@ -1,7 +1,7 @@
 name: Build Android APK (android-freeform)
 
 on:
-  workflow_dispatch: {}     # manual trigger
+  workflow_dispatch: {}
   push:
     branches:
       - main
@@ -14,7 +14,7 @@ jobs:
       contents: read
       actions: read
     env:
-      ANDROID_SDK_ROOT: ${{ runner.temp }}/android-sdk
+      ANDROID_SDK_ROOT: ${{ runner.temp }}
 
     steps:
       - name: Checkout repository
@@ -40,48 +40,51 @@ jobs:
       - name: Install Android command-line tools and SDK components
         run: |
           set -e
-          mkdir -p "$ANDROID_SDK_ROOT"
-          cd "$ANDROID_SDK_ROOT"
-          echo "SDK root: $ANDROID_SDK_ROOT"
+          SDK_DIR="$ANDROID_SDK_ROOT/android-sdk"
+          mkdir -p "$SDK_DIR"
+          echo "SDK root: $SDK_DIR"
           sudo apt-get update -y
           sudo apt-get install -y unzip wget
-          # Download command line tools (adjust URL if needed)
-          CLI_ZIP=cmdline-tools.zip
+          CLI_ZIP=/tmp/cmdline-tools.zip
           wget -q -O "$CLI_ZIP" "https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip"
-          unzip -q "$CLI_ZIP" -d cmdline-tools-temp
-          mkdir -p cmdline-tools/latest
-          mv cmdline-tools-temp/cmdline-tools/* cmdline-tools/latest/
-          rm -rf cmdline-tools-temp "$CLI_ZIP"
-          export PATH="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$PATH"
-          yes | sdkmanager --sdk_root="${ANDROID_SDK_ROOT}" --licenses
-          sdkmanager --sdk_root="${ANDROID_SDK_ROOT}" "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+          unzip -q "$CLI_ZIP" -d /tmp/cmdline-tools-temp
+          mkdir -p "$SDK_DIR/cmdline-tools/latest"
+          mv /tmp/cmdline-tools-temp/cmdline-tools/* "$SDK_DIR/cmdline-tools/latest/"
+          rm -rf /tmp/cmdline-tools-temp "$CLI_ZIP"
+          export PATH="$SDK_DIR/cmdline-tools/latest/bin:$PATH"
+          yes | sdkmanager --sdk_root="${SDK_DIR}" --licenses
+          sdkmanager --sdk_root="${SDK_DIR}" "platform-tools" "platforms;android-34" "build-tools;34.0.0"
         shell: bash
 
       - name: Ensure gradle wrapper executable if present
         run: |
           if [ -f ./gradlew ]; then chmod +x ./gradlew; fi
 
-      - name: Install Gradle (if no wrapper)
-        if: "!contains( join(github.event.head_commit.* || '' , ' '), 'gradlew' ) && !exists('./gradlew')"
+      - name: Install Gradle if no wrapper present
         run: |
-          # Install Gradle 8.6 (adjust version if necessary)
-          GRADLE_VERSION=8.6
-          wget -q https://services.gradle.org/distributions/gradle-${GRADLE_VERSION}-bin.zip -O /tmp/gradle.zip
-          sudo unzip -q /tmp/gradle.zip -d /opt/gradle
-          sudo ln -sfn /opt/gradle/gradle-${GRADLE_VERSION}/bin/gradle /usr/local/bin/gradle
-          gradle --version
+          if [ -f ./gradlew ]; then
+            echo "Gradle wrapper found, skipping install."
+          else
+            echo "No gradle wrapper; installing Gradle CLI..."
+            GRADLE_VERSION=8.6
+            wget -q https://services.gradle.org/distributions/gradle-${GRADLE_VERSION}-bin.zip -O /tmp/gradle.zip
+            sudo unzip -q /tmp/gradle.zip -d /opt/gradle
+            sudo ln -sfn /opt/gradle/gradle-${GRADLE_VERSION}/bin/gradle /usr/local/bin/gradle
+            gradle --version
+          fi
 
       - name: Build APK (Release if possible, fallback to Debug)
         working-directory: android-freeform
         run: |
           set -e
-          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
-          export PATH="$ANDROID_SDK_ROOT/platform-tools:$PATH"
-          # Prefer wrapper if present
-          if [ -f ../gradlew ] || [ -f ./gradlew ]; then
-            if [ -f ./gradlew ]; then ./gradlew assembleRelease || ./gradlew assembleDebug; else ../gradlew :app:assembleRelease || ../gradlew :app:assembleDebug; fi
+          SDK_DIR="$ANDROID_SDK_ROOT/android-sdk"
+          export PATH="$SDK_DIR/platform-tools:$PATH"
+          # Prefer wrapper if present (check in repo root and in android-freeform)
+          if [ -f ../gradlew ]; then
+            ../gradlew :app:assembleRelease || ../gradlew :app:assembleDebug
+          elif [ -f ./gradlew ]; then
+            ./gradlew assembleRelease || ./gradlew assembleDebug
           else
-            # Use installed gradle
             gradle :app:assembleRelease || gradle :app:assembleDebug
           fi
 
