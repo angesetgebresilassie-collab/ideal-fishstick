@@ -9,6 +9,9 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./android-freeform
 
     steps:
       - name: Checkout repository
@@ -19,11 +22,13 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
+          cache: 'gradle'
+          cache-dependency-path: 'android-freeform/**/*.gradle*'
 
       - name: Generate Gradle Wrapper if missing
         run: |
           if [ ! -f ./gradlew ]; then
-            echo "Gradle wrapper not found. Bootstrapping Gradle 8.5..."
+            echo "Gradle wrapper not found in android-freeform. Bootstrapping Gradle 8.5..."
             wget -q https://services.gradle.org/distributions/gradle-8.5-bin.zip -O /tmp/gradle-8.5-bin.zip
             unzip -q /tmp/gradle-8.5-bin.zip -d /tmp
             /tmp/gradle-8.5/bin/gradle wrapper --gradle-version 8.5
@@ -51,5 +56,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: app-debug
-          path: app/build/outputs/apk/debug/app-debug.apk
+          path: android-freeform/app/build/outputs/apk/debug/app-debug.apk
           
