@@ -1,0 +1,100 @@
+name: Build Android APK (android-freeform)
+
+on:
+  workflow_dispatch: {}     # manual trigger
+  push:
+    branches:
+      - main
+
+jobs:
+  build-apk:
+    name: Build android-freeform APK
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    env:
+      ANDROID_SDK_ROOT: ${{ runner.temp }}/android-sdk
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+
+      - name: Cache Gradle packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+
+      - name: Install Android command-line tools and SDK components
+        run: |
+          set -e
+          mkdir -p "$ANDROID_SDK_ROOT"
+          cd "$ANDROID_SDK_ROOT"
+          echo "SDK root: $ANDROID_SDK_ROOT"
+          sudo apt-get update -y
+          sudo apt-get install -y unzip wget
+          # Download command line tools (adjust URL if needed)
+          CLI_ZIP=cmdline-tools.zip
+          wget -q -O "$CLI_ZIP" "https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip"
+          unzip -q "$CLI_ZIP" -d cmdline-tools-temp
+          mkdir -p cmdline-tools/latest
+          mv cmdline-tools-temp/cmdline-tools/* cmdline-tools/latest/
+          rm -rf cmdline-tools-temp "$CLI_ZIP"
+          export PATH="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$PATH"
+          yes | sdkmanager --sdk_root="${ANDROID_SDK_ROOT}" --licenses
+          sdkmanager --sdk_root="${ANDROID_SDK_ROOT}" "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+        shell: bash
+
+      - name: Ensure gradle wrapper executable if present
+        run: |
+          if [ -f ./gradlew ]; then chmod +x ./gradlew; fi
+
+      - name: Install Gradle (if no wrapper)
+        if: "!contains( join(github.event.head_commit.* || '' , ' '), 'gradlew' ) && !exists('./gradlew')"
+        run: |
+          # Install Gradle 8.6 (adjust version if necessary)
+          GRADLE_VERSION=8.6
+          wget -q https://services.gradle.org/distributions/gradle-${GRADLE_VERSION}-bin.zip -O /tmp/gradle.zip
+          sudo unzip -q /tmp/gradle.zip -d /opt/gradle
+          sudo ln -sfn /opt/gradle/gradle-${GRADLE_VERSION}/bin/gradle /usr/local/bin/gradle
+          gradle --version
+
+      - name: Build APK (Release if possible, fallback to Debug)
+        working-directory: android-freeform
+        run: |
+          set -e
+          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
+          export PATH="$ANDROID_SDK_ROOT/platform-tools:$PATH"
+          # Prefer wrapper if present
+          if [ -f ../gradlew ] || [ -f ./gradlew ]; then
+            if [ -f ./gradlew ]; then ./gradlew assembleRelease || ./gradlew assembleDebug; else ../gradlew :app:assembleRelease || ../gradlew :app:assembleDebug; fi
+          else
+            # Use installed gradle
+            gradle :app:assembleRelease || gradle :app:assembleDebug
+          fi
+
+      - name: Collect APKs
+        run: |
+          set -e
+          echo "Searching for APKs under android-freeform/app/build/outputs..."
+          mkdir -p build-artifacts
+          find android-freeform/app/build -type f -name "*.apk" -print -exec cp {} build-artifacts/ \; || true
+          ls -lah build-artifacts || true
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-freeform-apks
+          path: build-artifacts/
