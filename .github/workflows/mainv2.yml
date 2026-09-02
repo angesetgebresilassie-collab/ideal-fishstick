@@ -31,8 +31,8 @@ jobs:
             echo "Gradle wrapper not found in android-freeform. Bootstrapping Gradle 8.7..."
             wget -q https://services.gradle.org/distributions/gradle-8.7-bin.zip -O /tmp/gradle-8.7-bin.zip
             unzip -q /tmp/gradle-8.7-bin.zip -d /tmp
-            /tmp/gradle-8.7/bin/gradle wrapper --gradle-version 8.7
-            rm -rf /tmp/gradle-8.7*
+            /tmp/gradle-8.7/bin/gradle wrapper --gradle-version 8.7 --no-daemon
+            rm -f /tmp/gradle-8.7-bin.zip
           fi
           chmod +x gradlew
 
@@ -50,7 +50,7 @@ jobs:
             -dname "CN=Developer, OU=Dev, O=Company, L=City, ST=State, C=US"
 
       - name: Build Debug APK
-        run: ./gradlew assembleDebug
+        run: ./gradlew assembleDebug --no-daemon
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
