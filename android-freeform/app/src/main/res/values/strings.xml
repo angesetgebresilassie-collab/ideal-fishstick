@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">MacFreeform</string>
+    <string name="decor_service_label">MacFreeform Window Decorations</string>
+    <string name="decor_service_description">Draws macOS-style title bars and traffic-light buttons over freeform windows.</string>
+</resources>
