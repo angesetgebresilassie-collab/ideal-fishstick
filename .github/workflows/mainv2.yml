@@ -19,14 +19,15 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
-          cache: 'gradle'
 
       - name: Generate Gradle Wrapper if missing
         run: |
           if [ ! -f ./gradlew ]; then
-            echo "Gradle wrapper not found. Installing Gradle and generating wrapper..."
-            sudo apt-get update && sudo apt-get install -y gradle
-            gradle wrapper
+            echo "Gradle wrapper not found. Bootstrapping Gradle 8.5..."
+            wget -q https://services.gradle.org/distributions/gradle-8.5-bin.zip -O /tmp/gradle-8.5-bin.zip
+            unzip -q /tmp/gradle-8.5-bin.zip -d /tmp
+            /tmp/gradle-8.5/bin/gradle wrapper --gradle-version 8.5
+            rm -rf /tmp/gradle-8.5*
           fi
           chmod +x gradlew
 
