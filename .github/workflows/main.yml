@@ -1,0 +1,45 @@
+name: Unzip android-freeform.zip to main
+on:
+  workflow_dispatch: {}
+
+jobs:
+  unzip:
+    name: Unzip archive and commit
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+          fetch-depth: 0
+
+      - name: Ensure unzip is installed
+        run: sudo apt-get update && sudo apt-get install -y unzip
+
+      - name: Verify archive exists
+        run: |
+          echo "Looking for android-freeform.zip in repository root..."
+          if [ ! -f android-freeform.zip ]; then echo "ERROR: android-freeform.zip not found" && exit 1; fi
+          ls -lah android-freeform.zip
+
+      - name: Unzip archive (overwrite existing files)
+        run: |
+          # unzip -o will overwrite existing files
+          unzip -o android-freeform.zip -d .
+
+      - name: Commit and push extracted files
+        env:
+          GIT_AUTHOR_NAME: github-actions[bot]
+          GIT_AUTHOR_EMAIL: github-actions[bot]@users.noreply.github.com
+        run: |
+          git config user.name "${GIT_AUTHOR_NAME}"
+          git config user.email "${GIT_AUTHOR_EMAIL}"
+          git add -A android-freeform || true
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+            exit 0
+          fi
+          git commit -m "Unzip android-freeform.zip into android-freeform/ (automated)"
+          git push origin HEAD:main
