@@ -28,11 +28,11 @@ jobs:
       - name: Generate Gradle Wrapper if missing
         run: |
           if [ ! -f ./gradlew ]; then
-            echo "Gradle wrapper not found in android-freeform. Bootstrapping Gradle 8.5..."
-            wget -q https://services.gradle.org/distributions/gradle-8.5-bin.zip -O /tmp/gradle-8.5-bin.zip
-            unzip -q /tmp/gradle-8.5-bin.zip -d /tmp
-            /tmp/gradle-8.5/bin/gradle wrapper --gradle-version 8.5
-            rm -rf /tmp/gradle-8.5*
+            echo "Gradle wrapper not found in android-freeform. Bootstrapping Gradle 8.7..."
+            wget -q https://services.gradle.org/distributions/gradle-8.7-bin.zip -O /tmp/gradle-8.7-bin.zip
+            unzip -q /tmp/gradle-8.7-bin.zip -d /tmp
+            /tmp/gradle-8.7/bin/gradle wrapper --gradle-version 8.7
+            rm -rf /tmp/gradle-8.7*
           fi
           chmod +x gradlew
 
