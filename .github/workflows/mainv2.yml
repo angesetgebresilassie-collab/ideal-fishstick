@@ -1,103 +1,54 @@
-name: Build Android APK (android-freeform)
+name: Build Android APK
 
 on:
-  workflow_dispatch: {}
   push:
-    branches:
-      - main
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
 
 jobs:
-  build-apk:
-    name: Build android-freeform APK
+  build:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      actions: read
-    env:
-      ANDROID_SDK_ROOT: ${{ runner.temp }}
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      - name: Set up Java 17
+      - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
-          distribution: temurin
           java-version: '17'
-          cache: gradle
+          distribution: 'temurin'
+          cache: 'gradle'
 
-      - name: Cache Gradle packages
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
-
-      - name: Install Android command-line tools and SDK components
+      - name: Generate Gradle Wrapper if missing
         run: |
-          set -e
-          SDK_DIR="$ANDROID_SDK_ROOT/android-sdk"
-          mkdir -p "$SDK_DIR"
-          echo "SDK root: $SDK_DIR"
-          sudo apt-get update -y
-          sudo apt-get install -y unzip wget
-          CLI_ZIP=/tmp/cmdline-tools.zip
-          wget -q -O "$CLI_ZIP" "https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip"
-          unzip -q "$CLI_ZIP" -d /tmp/cmdline-tools-temp
-          mkdir -p "$SDK_DIR/cmdline-tools/latest"
-          mv /tmp/cmdline-tools-temp/cmdline-tools/* "$SDK_DIR/cmdline-tools/latest/"
-          rm -rf /tmp/cmdline-tools-temp "$CLI_ZIP"
-          export PATH="$SDK_DIR/cmdline-tools/latest/bin:$PATH"
-          yes | sdkmanager --sdk_root="${SDK_DIR}" --licenses
-          sdkmanager --sdk_root="${SDK_DIR}" "platform-tools" "platforms;android-34" "build-tools;34.0.0"
-        shell: bash
-
-      - name: Ensure gradle wrapper executable if present
-        run: |
-          if [ -f ./gradlew ]; then chmod +x ./gradlew; fi
-
-      - name: Install Gradle if no wrapper present
-        run: |
-          if [ -f ./gradlew ]; then
-            echo "Gradle wrapper found, skipping install."
-          else
-            echo "No gradle wrapper; installing Gradle CLI..."
-            GRADLE_VERSION=8.6
-            wget -q https://services.gradle.org/distributions/gradle-${GRADLE_VERSION}-bin.zip -O /tmp/gradle.zip
-            sudo unzip -q /tmp/gradle.zip -d /opt/gradle
-            sudo ln -sfn /opt/gradle/gradle-${GRADLE_VERSION}/bin/gradle /usr/local/bin/gradle
-            gradle --version
+          if [ ! -f ./gradlew ]; then
+            echo "Gradle wrapper not found. Installing Gradle and generating wrapper..."
+            sudo apt-get update && sudo apt-get install -y gradle
+            gradle wrapper
           fi
+          chmod +x gradlew
 
-      - name: Build APK (Release if possible, fallback to Debug)
-        working-directory: android-freeform
+      - name: Generate Dummy Keystore
         run: |
-          set -e
-          SDK_DIR="$ANDROID_SDK_ROOT/android-sdk"
-          export PATH="$SDK_DIR/platform-tools:$PATH"
-          # Prefer wrapper if present (check in repo root and in android-freeform)
-          if [ -f ../gradlew ]; then
-            ../gradlew :app:assembleRelease || ../gradlew :app:assembleDebug
-          elif [ -f ./gradlew ]; then
-            ./gradlew assembleRelease || ./gradlew assembleDebug
-          else
-            gradle :app:assembleRelease || gradle :app:assembleDebug
-          fi
+          mkdir -p app/keystore
+          keytool -genkey -v \
+            -keystore app/keystore/dummy-key.jks \
+            -alias dummyAlias \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -storepass dummypassword \
+            -keypass dummypassword \
+            -dname "CN=Developer, OU=Dev, O=Company, L=City, ST=State, C=US"
 
-      - name: Collect APKs
-        run: |
-          set -e
-          echo "Searching for APKs under android-freeform/app/build/outputs..."
-          mkdir -p build-artifacts
-          find android-freeform/app/build -type f -name "*.apk" -print -exec cp {} build-artifacts/ \; || true
-          ls -lah build-artifacts || true
+      - name: Build Debug APK
+        run: ./gradlew assembleDebug
 
-      - name: Upload APK artifact
+      - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: android-freeform-apks
-          path: build-artifacts/
+          name: app-debug
+          path: app/build/outputs/apk/debug/app-debug.apk
+          
